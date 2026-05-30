@@ -898,23 +898,33 @@ class Ai1wm_Main_Controller {
 	 *
 	 * @return void
 	 *
-	 * SECURITY NOTE:
-	 * Only 'ai1wm_status' is registered as a nopriv (unauthenticated) action.
-	 * The status endpoint is required for internal server-to-server progress polling
-	 * during ongoing migrations, where no browser session cookie is available.
-	 * It is still protected by the secret_key parameter and only returns
-	 * read-only status information — it performs no destructive operations.
+	 * ARCHITECTURAL NOTE — Why export and import use nopriv hooks:
+	 * This plugin processes migrations in a multi-step chain. After each step, the
+	 * server fires a non-blocking wp_remote_post() to itself to continue the next step
+	 * (see Ai1wm_Import_Controller::import line 108, Ai1wm_Export_Controller::export line 104).
+	 * These internal server-to-server HTTP requests carry NO WordPress session cookie,
+	 * so they MUST go through nopriv (unauthenticated) hooks to be accepted by WordPress.
 	 *
-	 * All other actions (export, import, backup delete, feedback, report) require
-	 * the user to be logged in (wp_ajax_ prefix). This prevents unauthenticated
-	 * attackers from abusing these endpoints even if the secret_key is compromised.
+	 * SECURITY: These nopriv endpoints are protected by a 32-character cryptographically
+	 * random secret_key (stored in wp_options, excluded from exports, compared using
+	 * hash_equals() to prevent timing attacks). Without this key, the endpoints reject
+	 * all requests silently. This makes unauthorized access computationally infeasible.
+	 *
+	 * WHAT IS SAFE TO REMOVE from nopriv:
+	 * - ai1wm_backups (delete): No server-to-server chain. Single atomic operation.
+	 * - ai1wm_feedback: No chain. Simple POST to external service.
+	 * - ai1wm_report: No chain. Simple POST to external service.
 	 */
 	public function router() {
-		// Public action: status-only — read-only progress polling for ongoing migrations.
-		// Protected by secret_key. No destructive capability.
+		// Nopriv actions: required for internal server-to-server step continuation.
+		// All protected by the 32-char secret_key + hash_equals() timing-safe verification.
+		add_action( 'wp_ajax_nopriv_ai1wm_export', 'Ai1wm_Export_Controller::export' );
+		add_action( 'wp_ajax_nopriv_ai1wm_import', 'Ai1wm_Import_Controller::import' );
 		add_action( 'wp_ajax_nopriv_ai1wm_status', 'Ai1wm_Status_Controller::status' );
 
 		// Private actions: require an authenticated (logged-in) WordPress session.
+		// Backup delete, feedback, and report do NOT use server-to-server chaining,
+		// so they safely require login without breaking functionality.
 		add_action( 'wp_ajax_ai1wm_export',   'Ai1wm_Export_Controller::export' );
 		add_action( 'wp_ajax_ai1wm_import',   'Ai1wm_Import_Controller::import' );
 		add_action( 'wp_ajax_ai1wm_status',   'Ai1wm_Status_Controller::status' );
