@@ -53,6 +53,13 @@ class Ai1wm_Updater_Controller {
 	}
 
 	public static function updater( $params = array() ) {
+		// Verify the user has permission to update plugins.
+		// This check was moved here from hook registration time because
+		// current_user_can() is unreliable during the 'init' action.
+		if ( ! current_user_can( 'update_plugins' ) ) {
+			exit;
+		}
+
 		ai1wm_setup_environment();
 
 		// Set params

@@ -44,6 +44,12 @@ class Ai1wm_Main_Controller {
 	 * @return void
 	 */
 	public function activation_hook() {
+		// Set secret key on activation to prevent initial install race conditions where
+		// background loopback/AJAX requests are fired before any admin page load.
+		if ( ! get_option( AI1WM_SECRET_KEY ) ) {
+			update_option( AI1WM_SECRET_KEY, wp_generate_password( 32, true, true ) );
+		}
+
 		if ( is_dir( AI1WM_BACKUPS_PATH ) ) {
 			$this->create_backups_htaccess( AI1WM_BACKUPS_HTACCESS );
 			$this->create_backups_webconfig( AI1WM_BACKUPS_WEBCONFIG );
@@ -74,7 +80,7 @@ class Ai1wm_Main_Controller {
 		add_action( 'admin_init', array( $this, 'init' ) );
 
 		// Router
-		add_action( 'admin_init', array( $this, 'router' ) );
+		add_action( 'init', array( $this, 'router' ) );
 
 		// Setup folders
 		add_action( 'admin_init', array( $this, 'setup_folders' ) );
@@ -916,6 +922,12 @@ class Ai1wm_Main_Controller {
 	 * - ai1wm_report: No chain. Simple POST to external service.
 	 */
 	public function router() {
+		// Fallback check to guarantee the secret key is always populated in the DB 
+		// before routing loopback/AJAX requests.
+		if ( ! get_option( AI1WM_SECRET_KEY ) ) {
+			update_option( AI1WM_SECRET_KEY, wp_generate_password( 32, true, true ) );
+		}
+
 		// Nopriv actions: required for internal server-to-server step continuation.
 		// All protected by the 32-char secret_key + hash_equals() timing-safe verification.
 		add_action( 'wp_ajax_nopriv_ai1wm_export', 'Ai1wm_Export_Controller::export' );
@@ -932,10 +944,11 @@ class Ai1wm_Main_Controller {
 		add_action( 'wp_ajax_ai1wm_feedback', 'Ai1wm_Feedback_Controller::feedback' );
 		add_action( 'wp_ajax_ai1wm_report',   'Ai1wm_Report_Controller::report' );
 
-		// Update actions: restricted to users with 'update_plugins' capability only.
-		if ( current_user_can( 'update_plugins' ) ) {
-			add_action( 'wp_ajax_ai1wm_updater', 'Ai1wm_Updater_Controller::updater' );
-		}
+		// Update actions: capability check is performed inside the handler itself,
+		// because current_user_can() is unreliable at 'init' timing (cookies may not
+		// be parsed yet). The handler verifies 'update_plugins' capability before
+		// executing any logic.
+		add_action( 'wp_ajax_ai1wm_updater', 'Ai1wm_Updater_Controller::updater' );
 	}
 
 	/**
