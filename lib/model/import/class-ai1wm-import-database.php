@@ -696,7 +696,7 @@ class Ai1wm_Import_Database {
 		$home_url = get_option( AI1WM_HOME_URL );
 
 		// Get secret key
-		$secret_key = get_option( AI1WM_SECRET_KEY );
+		$secret_key = ai1wm_get_secret_key();
 
 		// Get HTTP user
 		$auth_user = get_option( AI1WM_AUTH_USER );

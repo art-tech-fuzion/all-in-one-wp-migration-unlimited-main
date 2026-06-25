@@ -1443,6 +1443,24 @@ function ai1wm_fseek($file_handle, Math_BigInteger $offset)
 }
 
 /**
+ * Get secret key safely, avoiding cache misses/lag by falling back to a direct DB query.
+ *
+ * @return string|bool
+ */
+function ai1wm_get_secret_key()
+{
+	$secret_key = get_option(AI1WM_SECRET_KEY);
+	if (empty($secret_key)) {
+		global $wpdb;
+		$secret_key = $wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", AI1WM_SECRET_KEY));
+		if ($secret_key) {
+			wp_cache_set(AI1WM_SECRET_KEY, $secret_key, 'options');
+		}
+	}
+	return $secret_key;
+}
+
+/**
  * Verify secret key
  *
  * Uses hash_equals() for constant-time comparison to prevent timing attacks.
@@ -1456,7 +1474,7 @@ function ai1wm_fseek($file_handle, Math_BigInteger $offset)
  */
 function ai1wm_verify_secret_key($secret_key)
 {
-	$stored_key = get_option(AI1WM_SECRET_KEY);
+	$stored_key = ai1wm_get_secret_key();
 
 	// Reject empty or missing keys immediately to prevent null-bypass attacks
 	if (empty($secret_key) || empty($stored_key)) {

@@ -46,8 +46,8 @@ class Ai1wm_Main_Controller {
 	public function activation_hook() {
 		// Set secret key on activation to prevent initial install race conditions where
 		// background loopback/AJAX requests are fired before any admin page load.
-		if ( ! get_option( AI1WM_SECRET_KEY ) ) {
-			update_option( AI1WM_SECRET_KEY, wp_generate_password( 32, true, true ) );
+		if ( ! ai1wm_get_secret_key() ) {
+			update_option( AI1WM_SECRET_KEY, wp_generate_password( 32, false, false ) );
 		}
 
 		if ( is_dir( AI1WM_BACKUPS_PATH ) ) {
@@ -578,14 +578,14 @@ class Ai1wm_Main_Controller {
 			'ajax'       => array(
 				'url' => wp_make_link_relative( admin_url( 'admin-ajax.php?action=ai1wm_feedback' ) ),
 			),
-			'secret_key' => get_option( AI1WM_SECRET_KEY ),
+			'secret_key' => ai1wm_get_secret_key(),
 		) );
 
 		wp_localize_script( 'ai1wm_export', 'ai1wm_report', array(
 			'ajax'       => array(
 				'url' => wp_make_link_relative( admin_url( 'admin-ajax.php?action=ai1wm_report' ) ),
 			),
-			'secret_key' => get_option( AI1WM_SECRET_KEY ),
+			'secret_key' => ai1wm_get_secret_key(),
 		) );
 
 		wp_localize_script( 'ai1wm_export', 'ai1wm_export', array(
@@ -593,9 +593,9 @@ class Ai1wm_Main_Controller {
 				'url' => wp_make_link_relative( admin_url( 'admin-ajax.php?action=ai1wm_export' ) ),
 			),
 			'status'     => array(
-				'url' => wp_make_link_relative( add_query_arg( array( 'secret_key' => get_option( AI1WM_SECRET_KEY ) ), admin_url( 'admin-ajax.php?action=ai1wm_status' ) ) ),
+				'url' => wp_make_link_relative( add_query_arg( array( 'secret_key' => ai1wm_get_secret_key() ), admin_url( 'admin-ajax.php?action=ai1wm_status' ) ) ),
 			),
-			'secret_key' => get_option( AI1WM_SECRET_KEY ),
+			'secret_key' => ai1wm_get_secret_key(),
 		) );
 
 		wp_localize_script( 'ai1wm_export', 'ai1wm_locale', array(
@@ -654,14 +654,14 @@ class Ai1wm_Main_Controller {
 			'ajax'       => array(
 				'url' => wp_make_link_relative( admin_url( 'admin-ajax.php?action=ai1wm_feedback' ) ),
 			),
-			'secret_key' => get_option( AI1WM_SECRET_KEY ),
+			'secret_key' => ai1wm_get_secret_key(),
 		) );
 
 		wp_localize_script( 'ai1wm_import', 'ai1wm_report', array(
 			'ajax'       => array(
 				'url' => wp_make_link_relative( admin_url( 'admin-ajax.php?action=ai1wm_report' ) ),
 			),
-			'secret_key' => get_option( AI1WM_SECRET_KEY ),
+			'secret_key' => ai1wm_get_secret_key(),
 		) );
 
 		wp_localize_script( 'ai1wm_import', 'ai1wm_uploader', array(
@@ -670,7 +670,7 @@ class Ai1wm_Main_Controller {
 			'url'         => wp_make_link_relative( admin_url( 'admin-ajax.php?action=ai1wm_import' ) ),
 			'params'      => array(
 				'priority'   => 5,
-				'secret_key' => get_option( AI1WM_SECRET_KEY ),
+				'secret_key' => ai1wm_get_secret_key(),
 			),
 			'filters'     => array(
 				'ai1wm_archive_extension' => array( 'wpress' ),
@@ -683,9 +683,9 @@ class Ai1wm_Main_Controller {
 				'url' => wp_make_link_relative( admin_url( 'admin-ajax.php?action=ai1wm_import' ) ),
 			),
 			'status'     => array(
-				'url' => wp_make_link_relative( add_query_arg( array( 'secret_key' => get_option( AI1WM_SECRET_KEY ) ), admin_url( 'admin-ajax.php?action=ai1wm_status' ) ) ),
+				'url' => wp_make_link_relative( add_query_arg( array( 'secret_key' => ai1wm_get_secret_key() ), admin_url( 'admin-ajax.php?action=ai1wm_status' ) ) ),
 			),
-			'secret_key' => get_option( AI1WM_SECRET_KEY ),
+			'secret_key' => ai1wm_get_secret_key(),
 		) );
 
 		wp_localize_script( 'ai1wm_import', 'ai1wm_locale', array(
@@ -764,14 +764,14 @@ class Ai1wm_Main_Controller {
 			'ajax'       => array(
 				'url' => wp_make_link_relative( admin_url( 'admin-ajax.php?action=ai1wm_feedback' ) ),
 			),
-			'secret_key' => get_option( AI1WM_SECRET_KEY ),
+			'secret_key' => ai1wm_get_secret_key(),
 		) );
 
 		wp_localize_script( 'ai1wm_backups', 'ai1wm_report', array(
 			'ajax'       => array(
 				'url' => wp_make_link_relative( admin_url( 'admin-ajax.php?action=ai1wm_report' ) ),
 			),
-			'secret_key' => get_option( AI1WM_SECRET_KEY ),
+			'secret_key' => ai1wm_get_secret_key(),
 		) );
 
 		wp_localize_script( 'ai1wm_backups', 'ai1wm_import', array(
@@ -779,16 +779,16 @@ class Ai1wm_Main_Controller {
 				'url' => wp_make_link_relative( admin_url( 'admin-ajax.php?action=ai1wm_import' ) ),
 			),
 			'status'     => array(
-				'url' => wp_make_link_relative( add_query_arg( array( 'secret_key' => get_option( AI1WM_SECRET_KEY ) ), admin_url( 'admin-ajax.php?action=ai1wm_status' ) ) ),
+				'url' => wp_make_link_relative( add_query_arg( array( 'secret_key' => ai1wm_get_secret_key() ), admin_url( 'admin-ajax.php?action=ai1wm_status' ) ) ),
 			),
-			'secret_key' => get_option( AI1WM_SECRET_KEY ),
+			'secret_key' => ai1wm_get_secret_key(),
 		) );
 
 		wp_localize_script( 'ai1wm_backups', 'ai1wm_backups', array(
 			'ajax'       => array(
 				'url' => wp_make_link_relative( admin_url( 'admin-ajax.php?action=ai1wm_backups' ) ),
 			),
-			'secret_key' => get_option( AI1WM_SECRET_KEY ),
+			'secret_key' => ai1wm_get_secret_key(),
 		) );
 
 		wp_localize_script( 'ai1wm_backups', 'ai1wm_locale', array(
@@ -873,10 +873,12 @@ class Ai1wm_Main_Controller {
 	 */
 	public function init() {
 
-		// Set secret key — 32 characters with special chars for ~190-bit entropy.
-		// This makes brute-force enumeration computationally infeasible.
-		if ( ! get_option( AI1WM_SECRET_KEY ) ) {
-			update_option( AI1WM_SECRET_KEY, wp_generate_password( 32, true, true ) );
+		// Set secret key — 32 characters, alphanumeric only to prevent URL encoding & parameter splitting errors.
+		$secret_key = ai1wm_get_secret_key();
+		if ( ! $secret_key || preg_match( '/[^a-zA-Z0-9]/', $secret_key ) ) {
+			$secret_key = wp_generate_password( 32, false, false );
+			update_option( AI1WM_SECRET_KEY, $secret_key );
+			wp_cache_delete( AI1WM_SECRET_KEY, 'options' );
 		}
 
 		// Set username
@@ -922,10 +924,13 @@ class Ai1wm_Main_Controller {
 	 * - ai1wm_report: No chain. Simple POST to external service.
 	 */
 	public function router() {
-		// Fallback check to guarantee the secret key is always populated in the DB 
+		// Fallback check to guarantee the secret key is always populated in the DB
 		// before routing loopback/AJAX requests.
-		if ( ! get_option( AI1WM_SECRET_KEY ) ) {
-			update_option( AI1WM_SECRET_KEY, wp_generate_password( 32, true, true ) );
+		$secret_key = ai1wm_get_secret_key();
+		if ( ! $secret_key || preg_match( '/[^a-zA-Z0-9]/', $secret_key ) ) {
+			$secret_key = wp_generate_password( 32, false, false );
+			update_option( AI1WM_SECRET_KEY, $secret_key );
+			wp_cache_delete( AI1WM_SECRET_KEY, 'options' );
 		}
 
 		// Nopriv actions: required for internal server-to-server step continuation.

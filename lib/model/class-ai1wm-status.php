@@ -56,6 +56,7 @@ class Ai1wm_Status {
 	public static function log( $data ) {
 		if ( ! ai1wm_is_scheduled_backup() ) {
 			update_option( AI1WM_STATUS, $data );
+			wp_cache_delete( AI1WM_STATUS, 'options' );
 		}
 	}
 }

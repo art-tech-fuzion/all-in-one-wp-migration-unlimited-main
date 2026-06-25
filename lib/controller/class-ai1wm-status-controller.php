@@ -45,7 +45,19 @@ class Ai1wm_Status_Controller {
 			exit;
 		}
 
-		echo json_encode( get_option( AI1WM_STATUS, array() ) );
+		// Clear option cache to get absolute latest value
+		wp_cache_delete( AI1WM_STATUS, 'options' );
+
+		$status = get_option( AI1WM_STATUS, array() );
+		if ( empty( $status ) ) {
+			global $wpdb;
+			$db_status = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", AI1WM_STATUS ) );
+			if ( $db_status ) {
+				$status = maybe_unserialize( $db_status );
+			}
+		}
+
+		echo json_encode( $status );
 		exit;
 	}
 }

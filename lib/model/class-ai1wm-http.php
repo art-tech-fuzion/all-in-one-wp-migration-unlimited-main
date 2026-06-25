@@ -71,7 +71,7 @@ class Ai1wm_Http {
 		delete_option( AI1WM_URL_ADAPTER );
 
 		// Set secret
-		$secret_key = get_option( AI1WM_SECRET_KEY );
+		$secret_key = ai1wm_get_secret_key();
 
 		// Set host
 		$host = parse_url( $url, PHP_URL_HOST );
