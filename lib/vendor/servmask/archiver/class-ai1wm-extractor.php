@@ -72,7 +72,7 @@ class Ai1wm_Extractor extends Ai1wm_Archiver {
 			while ( $block = @fread( $this->file_handle, 4377 ) ) {
 
 				// End block has been reached
-				if ( $block === $this->eof ) {
+				if ( $this->is_eof_block( $block ) ) {
 					continue;
 				}
 
@@ -119,7 +119,7 @@ class Ai1wm_Extractor extends Ai1wm_Archiver {
 			while ( $block = @fread( $this->file_handle, 4377 ) ) {
 
 				// End block has been reached
-				if ( $block === $this->eof ) {
+				if ( $this->is_eof_block( $block ) ) {
 					continue;
 				}
 
@@ -180,7 +180,7 @@ class Ai1wm_Extractor extends Ai1wm_Archiver {
 		if ( ( $block = @fread( $this->file_handle, 4377 ) ) ) {
 
 			// We reached end of file, set the pointer to the end of the file so that feof returns true
-			if ( $block === $this->eof ) {
+			if ( $this->is_eof_block( $block ) ) {
 
 				// Seek to end of archive file minus 1 byte
 				@fseek( $this->file_handle, 1, SEEK_END );
@@ -298,7 +298,7 @@ class Ai1wm_Extractor extends Ai1wm_Archiver {
 		while ( ( $block = @fread( $this->file_handle, 4377 ) ) ) {
 
 			// We reached end of file, set the pointer to the end of the file so that feof returns true
-			if ( $block === $this->eof ) {
+			if ( $this->is_eof_block( $block ) ) {
 
 				// Seek to end of archive file minus 1 byte
 				@fseek( $this->file_handle, 1, SEEK_END );
@@ -493,12 +493,13 @@ class Ai1wm_Extractor extends Ai1wm_Archiver {
 	private function get_data_from_block( $block ) {
 		$data = false;
 
-		// prepare our array keys to unpack
+		// Prepare our array keys to unpack
 		$format = array(
 			$this->block_format[0] . 'filename/',
 			$this->block_format[1] . 'size/',
 			$this->block_format[2] . 'mtime/',
-			$this->block_format[3] . 'path',
+			$this->block_format[3] . 'path/',
+			$this->block_format[4] . 'crc32',
 		);
 		$format = implode( '', $format );
 
@@ -507,9 +508,10 @@ class Ai1wm_Extractor extends Ai1wm_Archiver {
 
 			// Set file details
 			$data['filename'] = trim( $data['filename'] );
-			$data['size']     = trim( $data['size'] );
-			$data['mtime']    = trim( $data['mtime'] );
+			$data['size']     = (int) trim( $data['size'] );
+			$data['mtime']    = (int) trim( $data['mtime'] );
 			$data['path']     = trim( $data['path'] );
+			$data['crc32']    = trim( $data['crc32'] );
 
 			// Set file name
 			$data['filename'] = ( $data['path'] === '.' ? $data['filename'] : $data['path'] . DIRECTORY_SEPARATOR . $data['filename'] );

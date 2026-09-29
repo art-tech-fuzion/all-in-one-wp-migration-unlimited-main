@@ -46,7 +46,8 @@ abstract class Ai1wm_Archiver {
 	 * name               0       255    filename (no path, no slash)
 	 * size             255        14    size of file contents
 	 * mtime            269        12    last modification time
-	 * prefix           281      4096    path name, no trailing slashes
+	 * prefix           281      4088    path name, no trailing slashes
+	 * crc32           4369         8    CRC32 checksum (hex string, optional)
 	 *
 	 * @type array
 	 */
@@ -54,7 +55,8 @@ abstract class Ai1wm_Archiver {
 		'a255',  // filename
 		'a14',   // size of file contents
 		'a12',   // last time modified
-		'a4096', // path
+		'a4088', // path
+		'a8',    // crc32
 	);
 
 	/**
@@ -63,6 +65,20 @@ abstract class Ai1wm_Archiver {
 	 * @type string
 	 */
 	protected $eof = null;
+
+	/**
+	 * Archive CRC value
+	 *
+	 * @type string
+	 */
+	protected $archive_crc_value = null;
+
+	/**
+	 * Archive CRC size
+	 *
+	 * @type int
+	 */
+	protected $archive_crc_size = null;
 
 	/**
 	 * Default constructor
@@ -193,15 +209,132 @@ abstract class Ai1wm_Archiver {
 	public function is_valid() {
 		if ( ( $offset = @ftell( $this->file_handle ) ) !== false ) {
 			if ( @fseek( $this->file_handle, -4377, SEEK_END ) !== -1 ) {
-				if ( @fread( $this->file_handle, 4377 ) === $this->eof ) {
+				if ( ( $block = @fread( $this->file_handle, 4377 ) ) !== false ) {
 					if ( @fseek( $this->file_handle, $offset, SEEK_SET ) !== -1 ) {
-						return true;
+						return $this->is_eof_block( $block );
 					}
 				}
 			}
 		}
 
 		return false;
+	}
+
+	/**
+	 * Generate end of file block
+	 *
+	 * @param string $archive_crc_size  Archive size
+	 * @param string $archive_crc_value Archive CRC
+	 *
+	 * @return string
+	 */
+	protected function get_eof_block( $archive_crc_size = null, $archive_crc_value = null ) {
+		return pack( 'a255a14a4100a8', '', $archive_crc_size, '', $archive_crc_value );
+	}
+
+	/**
+	 * Check if a block is an end of file block (v1 or v2)
+	 *
+	 * @param string $block The block to check
+	 *
+	 * @return bool
+	 */
+	public function is_eof_block( $block ) {
+		return $this->is_v1_eof( $block ) || $this->is_v2_eof( $block );
+	}
+
+	/**
+	 * Check if a block is a v1 end of file block (all null bytes)
+	 *
+	 * @param string $block The block to check
+	 *
+	 * @return bool
+	 */
+	protected function is_v1_eof( $block ) {
+		return $this->get_eof_block( '', '' ) === $block;
+	}
+
+	/**
+	 * Check if a block is a v2 end of file block
+	 *
+	 * @param string $block The block to check
+	 *
+	 * @return bool
+	 */
+	protected function is_v2_eof( $block ) {
+		// Unpack end of file data
+		if ( ( $data = unpack( 'a255/a14size/a4100/a8crc32', $block ) ) ) {
+			if ( isset( $data['size'], $data['crc32'] ) ) {
+				if ( preg_match( '/^[0-9a-f]{8}$/i', $data['crc32'] ) ) {
+					return $this->get_eof_block( $data['size'], $data['crc32'] ) === $block;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Get archive CRC from EOF block (v2 only)
+	 *
+	 * @return string|null CRC32 hex string or null if v1 archive
+	 */
+	public function get_archive_crc_value() {
+		if ( is_null( $this->archive_crc_value ) ) {
+			$this->set_archive_crc_data();
+		}
+
+		return $this->archive_crc_value;
+	}
+
+	/**
+	 * Get archive CRC size from EOF block (v2 only)
+	 *
+	 * @return int|null Size or null if v1 archive
+	 */
+	public function get_archive_crc_size() {
+		if ( is_null( $this->archive_crc_size ) ) {
+			$this->set_archive_crc_data();
+		}
+
+		return $this->archive_crc_size;
+	}
+
+	/**
+	 * Set archive CRC value and size from the v2 EOF block
+	 *
+	 * @return void
+	 */
+	protected function set_archive_crc_data() {
+		if ( ( $offset = @ftell( $this->file_handle ) ) === false ) {
+			return;
+		}
+
+		if ( @fseek( $this->file_handle, -4377, SEEK_END ) === -1 ) {
+			return;
+		}
+
+		if ( ( $block = @fread( $this->file_handle, 4377 ) ) === false ) {
+			return;
+		}
+
+		if ( @fseek( $this->file_handle, $offset, SEEK_SET ) === -1 ) {
+			return;
+		}
+
+		if ( $this->is_v2_eof( $block ) === false ) {
+			return;
+		}
+
+		if ( ( $data = unpack( 'a255/a14size/a4100/a8crc32', $block ) ) ) {
+			if ( isset( $data['crc32'] ) ) {
+				$this->archive_crc_value = trim( $data['crc32'] );
+			}
+
+			if ( isset( $data['size'] ) ) {
+				$this->archive_crc_size = (int) trim( $data['size'] );
+			}
+		}
 	}
 
 	/**

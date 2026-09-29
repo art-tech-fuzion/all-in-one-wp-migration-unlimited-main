@@ -189,7 +189,7 @@ class Ai1wm_Compressor extends Ai1wm_Archiver {
 			$format = implode( '', $this->block_format );
 
 			// Pack file data into binary string
-			$block = pack( $format, $name, $size, $date, $path );
+			$block = pack( $format, $name, $size, $date, $path, '' );
 		}
 
 		return $block;
@@ -208,6 +208,24 @@ class Ai1wm_Compressor extends Ai1wm_Archiver {
 		// Pack file data into binary string
 		if ( isset( $this->block_format[1] ) ) {
 			$block = pack( $this->block_format[1], $file_size );
+		}
+
+		return $block;
+	}
+
+	/**
+	 * Generate file CRC binary block header for a file
+	 *
+	 * @param int $file_crc File CRC
+	 *
+	 * @return string
+	 */
+	public function get_file_crc_block( $file_crc ) {
+		$block = false;
+
+		// Pack file data into binary string
+		if ( isset( $this->block_format[4] ) ) {
+			$block = pack( $this->block_format[4], $file_crc );
 		}
 
 		return $block;

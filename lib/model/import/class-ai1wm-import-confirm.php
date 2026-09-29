@@ -48,11 +48,30 @@ class Ai1wm_Import_Confirm {
 
 		// Check compatibility of PHP versions
 		if ( isset( $package['PHP']['Version'] ) ) {
-			if ( version_compare( $package['PHP']['Version'], '7.0.0', '<' ) && version_compare( PHP_VERSION, '7.0.0', '>=' ) ) {
-				$messages[] = __(
-					'<i class="ai1wm-import-info">Your backup is from a PHP 5 but the site that you are importing to is PHP 7. ' .
-					'This could cause the import to fail. <a href="https://help.servmask.com/knowledgebase/migrate-wordpress-from-php-5-to-php-7/" target="_blank">Technical details</a></i>',
-					AI1WM_PLUGIN_NAME
+			$source_versions = explode( '.', $package['PHP']['Version'] );
+			$target_versions = explode( '.', PHP_VERSION );
+
+			$source_major_version = intval( $source_versions[0] );
+			$source_minor_version = intval( isset( $source_versions[1] ) ? $source_versions[1] : 0 );
+
+			$target_major_version = intval( $target_versions[0] );
+			$target_minor_version = intval( isset( $target_versions[1] ) ? $target_versions[1] : 0 );
+
+			if ( $source_major_version !== $target_major_version ) {
+				$from_php = $source_major_version;
+				$to_php   = $target_major_version;
+			} elseif ( $source_minor_version !== $target_minor_version ) {
+				$from_php = sprintf( '%s.%s', $source_major_version, $source_minor_version );
+				$to_php   = sprintf( '%s.%s', $target_major_version, $target_minor_version );
+			}
+
+			if ( isset( $from_php, $to_php ) ) {
+				$messages[] = sprintf(
+					'<i class="ai1wm-import-info">' .
+					__( 'Your backup is from a PHP %1$s but the site that you are importing to is PHP %2$s. This could cause the import to fail. <a href="https://help.servmask.com/knowledgebase/migrate-wordpress-from-php-5-to-php-7/" target="_blank">Technical details</a>', AI1WM_PLUGIN_NAME ) .
+					'</i>',
+					$from_php,
+					$to_php
 				);
 			}
 		}
