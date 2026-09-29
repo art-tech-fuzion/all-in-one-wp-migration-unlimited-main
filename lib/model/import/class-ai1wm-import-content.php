@@ -62,6 +62,13 @@ class Ai1wm_Import_Content {
 			$total_files_count = 1;
 		}
 
+		// Clean existing content before extracting files (only on the initial chunk)
+		if ( empty( $params['content_cleaned'] ) && $archive_bytes_offset === 0 && $file_bytes_offset === 0 ) {
+			Ai1wm_Status::info( __( 'Removing old plugins, themes, and uploads...', AI1WM_PLUGIN_NAME ) );
+			self::clean_existing_content( $params );
+			$params['content_cleaned'] = true;
+		}
+
 		// Read blogs.json file
 		$handle = ai1wm_open( ai1wm_blogs_path( $params ), 'r' );
 
@@ -145,12 +152,27 @@ class Ai1wm_Import_Content {
 			// Exclude WordPress files
 			$exclude_files = array_keys( _get_dropins() );
 
-			// Exclude plugin files
+			// Exclude plugin files and third-party backup/cache folders
 			$exclude_files = array_merge( $exclude_files, array(
 				AI1WM_PACKAGE_NAME,
 				AI1WM_MULTISITE_NAME,
 				AI1WM_DATABASE_NAME,
 				AI1WM_MUPLUGINS_NAME,
+				'updraft',
+				'wpvividbackups',
+				'wpvivid_staging',
+				'wpvivid_uploads',
+				'wpo-cache',
+				'wpo-cache-old',
+				'cache',
+				'litespeed',
+				'upgrade-temp-backup',
+				'maintenance',
+				'wflogs',
+				'nfwlog',
+				'backwpup',
+				'backupbuddy_backups',
+				'duplicator',
 			) );
 
 			// Extract a file from archive to WP_CONTENT_DIR
@@ -200,6 +222,9 @@ class Ai1wm_Import_Content {
 			// Unset completed flag
 			unset( $params['completed'] );
 
+			// Unset content cleaned flag
+			unset( $params['content_cleaned'] );
+
 		} else {
 
 			// Set archive bytes offset
@@ -219,11 +244,303 @@ class Ai1wm_Import_Content {
 
 			// Set completed flag
 			$params['completed'] = $completed;
+
+			// Set content cleaned flag
+			$params['content_cleaned'] = true;
 		}
 
 		// Close the archive file
 		$archive->close();
 
 		return $params;
+	}
+
+	/**
+	 * Clean existing content (plugins, themes, uploads, cache) before restoring archive
+	 *
+	 * @param array $params
+	 * @return void
+	 */
+	public static function clean_existing_content( $params ) {
+		// Read package.json to know what components are present in the backup
+		$package = array();
+		if ( is_file( ai1wm_package_path( $params ) ) ) {
+			if ( ( $handle = ai1wm_open( ai1wm_package_path( $params ), 'r' ) ) ) {
+				$package_data = ai1wm_read( $handle, filesize( ai1wm_package_path( $params ) ) );
+				$package = json_decode( $package_data, true );
+				ai1wm_close( $handle );
+			}
+		}
+
+		// 1. Clean existing plugins if backup contains plugins
+		if ( empty( $package['NoPlugins'] ) ) {
+			$plugins_dir = defined( 'WP_PLUGIN_DIR' ) ? WP_PLUGIN_DIR : ( WP_CONTENT_DIR . DIRECTORY_SEPARATOR . 'plugins' );
+			if ( is_dir( $plugins_dir ) ) {
+				// Build list of plugins to exclude (MUST NEVER DELETE MIGRATION PLUGIN OR ITS EXTENSIONS)
+				$excluded_plugins = array(
+					'index.php',
+					basename( AI1WM_PATH ),
+				);
+
+				if ( defined( 'AI1WM_PLUGIN_BASENAME' ) ) {
+					$excluded_plugins[] = dirname( AI1WM_PLUGIN_BASENAME );
+				}
+
+				if ( function_exists( 'ai1wm_active_servmask_plugins' ) ) {
+					foreach ( ai1wm_active_servmask_plugins() as $sm_plugin ) {
+						$excluded_plugins[] = dirname( $sm_plugin );
+					}
+				}
+
+				$excluded_plugins = array_unique( array_filter( $excluded_plugins ) );
+
+				self::clean_directory_contents( $plugins_dir, function ( $item, $full_path ) use ( $excluded_plugins ) {
+					// Protect any file/folder starting with '.'
+					if ( strpos( $item, '.' ) === 0 ) {
+						return false;
+					}
+
+					// Protect standard index.php
+					if ( $item === 'index.php' ) {
+						return false;
+					}
+
+					// Protect any plugin folder matching all-in-one-wp-migration*
+					if ( strpos( $item, 'all-in-one-wp-migration' ) === 0 ) {
+						return false;
+					}
+
+					// Protect current plugin path or active servmask extensions
+					if ( in_array( $item, $excluded_plugins, true ) ) {
+						return false;
+					}
+
+					if ( defined( 'AI1WM_PATH' ) && realpath( $full_path ) === realpath( AI1WM_PATH ) ) {
+						return false;
+					}
+
+					return true;
+				} );
+			}
+		}
+
+		// 2. Clean existing themes if backup contains themes
+		if ( empty( $package['NoThemes'] ) ) {
+			$themes_dir = function_exists( 'get_theme_root' ) ? get_theme_root() : ( WP_CONTENT_DIR . DIRECTORY_SEPARATOR . 'themes' );
+			if ( is_dir( $themes_dir ) ) {
+				self::clean_directory_contents( $themes_dir, function ( $item, $full_path ) {
+					// Protect any file/folder starting with '.'
+					if ( strpos( $item, '.' ) === 0 ) {
+						return false;
+					}
+
+					// Protect standard index.php
+					if ( $item === 'index.php' ) {
+						return false;
+					}
+
+					return true;
+				} );
+			}
+		}
+
+		// 3. Clean existing media/uploads if backup contains media
+		if ( empty( $package['NoMedia'] ) ) {
+			$uploads_dirs = array();
+
+			// WordPress upload dir
+			if ( function_exists( 'wp_upload_dir' ) ) {
+				$upload_data = wp_upload_dir();
+				if ( ! empty( $upload_data['basedir'] ) && is_dir( $upload_data['basedir'] ) ) {
+					$uploads_dirs[] = $upload_data['basedir'];
+				}
+			}
+
+			// Fallback/standard uploads directory
+			$standard_uploads = WP_CONTENT_DIR . DIRECTORY_SEPARATOR . 'uploads';
+			if ( is_dir( $standard_uploads ) && ! in_array( $standard_uploads, $uploads_dirs ) ) {
+				$uploads_dirs[] = $standard_uploads;
+			}
+
+			// Multisite blogs.dir
+			$blogs_dir = WP_CONTENT_DIR . DIRECTORY_SEPARATOR . 'blogs.dir';
+			if ( is_dir( $blogs_dir ) ) {
+				$uploads_dirs[] = $blogs_dir;
+			}
+
+			$backups_path = defined( 'AI1WM_BACKUPS_PATH' ) ? AI1WM_BACKUPS_PATH : ( WP_CONTENT_DIR . DIRECTORY_SEPARATOR . 'ai1wm-backups' );
+			$backups_real = realpath( $backups_path );
+			$archive_real = realpath( ai1wm_archive_path( $params ) );
+
+			foreach ( $uploads_dirs as $uploads_dir ) {
+				self::clean_directory_contents( $uploads_dir, function ( $item, $full_path ) use ( $backups_real, $archive_real ) {
+					if ( in_array( $item, array( 'index.php', '.htaccess', 'web.config' ), true ) ) {
+						return false;
+					}
+
+					if ( $item === 'ai1wm-backups' ) {
+						return false;
+					}
+
+					$real = realpath( $full_path );
+					if ( $real ) {
+						if ( $backups_real && ( $real === $backups_real || strpos( $real, $backups_real . DIRECTORY_SEPARATOR ) === 0 ) ) {
+							return false;
+						}
+
+						if ( $archive_real && $real === $archive_real ) {
+							return false;
+						}
+					}
+
+					return true;
+				} );
+			}
+		}
+
+		// 4. Clean all foreign and orphaned directories and files directly in WP_CONTENT_DIR
+		if ( is_dir( WP_CONTENT_DIR ) ) {
+			$whitelisted_dirs = array(
+				'ai1wm-backups',
+				'plugins',
+				'themes',
+				'uploads',
+				'mu-plugins',
+				'languages',
+				'upgrade',
+				'imunify-security',
+				'blogs.dir',
+				'fonts',
+			);
+
+			if ( defined( 'AI1WM_BACKUPS_PATH' ) ) {
+				$whitelisted_dirs[] = basename( AI1WM_BACKUPS_PATH );
+			}
+
+			$whitelisted_dirs = array_unique( array_filter( $whitelisted_dirs ) );
+
+			$whitelisted_files = array(
+				'index.php',
+				'.htaccess',
+				'db.php',
+			);
+
+			$content_items = @scandir( WP_CONTENT_DIR );
+			if ( false !== $content_items ) {
+				$backups_real = defined( 'AI1WM_BACKUPS_PATH' ) ? realpath( AI1WM_BACKUPS_PATH ) : false;
+				$archive_real = realpath( ai1wm_archive_path( $params ) );
+
+				foreach ( $content_items as $item ) {
+					if ( $item === '.' || $item === '..' ) {
+						continue;
+					}
+
+					$full_path = WP_CONTENT_DIR . DIRECTORY_SEPARATOR . $item;
+					$real = realpath( $full_path );
+
+					// NEVER delete AI1WM backups directory or archive
+					if ( $item === 'ai1wm-backups' || ( $backups_real && ( $real === $backups_real || strpos( $real, $backups_real . DIRECTORY_SEPARATOR ) === 0 ) ) ) {
+						continue;
+					}
+
+					if ( $archive_real && $real === $archive_real ) {
+						continue;
+					}
+
+					if ( is_dir( $full_path ) ) {
+						if ( ! in_array( $item, $whitelisted_dirs, true ) ) {
+							self::delete_directory_recursive( $full_path );
+						}
+					} else {
+						if ( ! in_array( $item, $whitelisted_files, true ) ) {
+							@chmod( $full_path, 0666 );
+							@unlink( $full_path );
+						}
+					}
+				}
+			}
+
+			// Ensure a clean standard WordPress index.php exists in WP_CONTENT_DIR
+			$index_file = WP_CONTENT_DIR . DIRECTORY_SEPARATOR . 'index.php';
+			if ( ! is_file( $index_file ) ) {
+				@file_put_contents( $index_file, "<?php\n// Silence is golden.\n" );
+			}
+		}
+	}
+
+	/**
+	 * Delete items inside a directory based on a filter callback
+	 *
+	 * @param string   $dir Directory path
+	 * @param callable $filter_callback Callback receiving ($item_name, $full_path). Returns true if item should be deleted.
+	 * @return void
+	 */
+	public static function clean_directory_contents( $dir, $filter_callback ) {
+		if ( ! is_dir( $dir ) || ! is_readable( $dir ) ) {
+			return;
+		}
+
+		$items = @scandir( $dir );
+		if ( false === $items ) {
+			return;
+		}
+
+		foreach ( $items as $item ) {
+			if ( $item === '.' || $item === '..' ) {
+				continue;
+			}
+
+			$full_path = $dir . DIRECTORY_SEPARATOR . $item;
+
+			// Ask callback if this item should be deleted
+			if ( is_callable( $filter_callback ) && ! call_user_func( $filter_callback, $item, $full_path ) ) {
+				continue;
+			}
+
+			if ( is_dir( $full_path ) && ! is_link( $full_path ) ) {
+				self::delete_directory_recursive( $full_path );
+			} else {
+				@chmod( $full_path, 0666 );
+				@unlink( $full_path );
+			}
+		}
+	}
+
+	/**
+	 * Recursively delete a directory and all its contents
+	 *
+	 * @param string $dir Directory path to delete
+	 * @return void
+	 */
+	public static function delete_directory_recursive( $dir ) {
+		if ( ! is_dir( $dir ) ) {
+			if ( is_file( $dir ) || is_link( $dir ) ) {
+				@chmod( $dir, 0666 );
+				@unlink( $dir );
+			}
+			return;
+		}
+
+		$items = @scandir( $dir );
+		if ( false === $items ) {
+			return;
+		}
+
+		foreach ( $items as $item ) {
+			if ( $item === '.' || $item === '..' ) {
+				continue;
+			}
+
+			$full_path = $dir . DIRECTORY_SEPARATOR . $item;
+			if ( is_dir( $full_path ) && ! is_link( $full_path ) ) {
+				self::delete_directory_recursive( $full_path );
+			} else {
+				@chmod( $full_path, 0666 );
+				@unlink( $full_path );
+			}
+		}
+
+		@chmod( $dir, 0777 );
+		@rmdir( $dir );
 	}
 }
